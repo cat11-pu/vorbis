@@ -5,7 +5,7 @@ AUTOMAKE_OPTIONS = foreign
 noinst_PROGRAMS = decoder_example encoder_example chaining_example\
 		vorbisfile_example seeking_example
 
-EXTRA_DIST = frameview.pl
+EXTRA_DIST = frameview.pl seek_decode.h seek_decode.c
 
 AM_CPPFLAGS = -I$(top_srcdir)/include @OGG_CFLAGS@
 
