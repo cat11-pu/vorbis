@@ -30,6 +30,35 @@
 #include "registry.h"
 #include "misc.h"
 
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#define OLA_HAVE_SSE2 1
+#endif
+
+/* Overlap/add: pcm[i] = pcm[i]*w[len-1-i] + p[i]*w[i].
+   The SSE2 path keeps the exact same two products and the same add
+   order per sample, so results are bit-identical to the scalar loop.
+   len is always a power of two >= 64, hence a multiple of 4. */
+static void _vorbis_ola(float *pcm,const float *p,const float *w,int len){
+#if defined(OLA_HAVE_SSE2)
+  int i=0;
+  for(;i+4<=len;i+=4){
+    __m128 pc = _mm_loadu_ps(pcm+i);
+    __m128 pp = _mm_loadu_ps(p+i);
+    __m128 wf = _mm_loadu_ps(w+i);
+    /* highest addressed element is w[len-1-i], so loading at
+       w+(len-i-4) stays in bounds; reverse within the register. */
+    __m128 wr = _mm_loadu_ps(w+(len-i-4));
+    wr = _mm_shuffle_ps(wr,wr,_MM_SHUFFLE(0,1,2,3));
+    _mm_storeu_ps(pcm+i, _mm_add_ps(_mm_mul_ps(pc,wr),
+                                    _mm_mul_ps(pp,wf)));
+  }
+#else
+  for(int i=0;i<len;i++)
+    pcm[i]=pcm[i]*w[len-i-1] + p[i]*w[i];
+#endif
+}
+
 /* pcm accumulator examples (not exhaustive):
 
  <-------------- lW ---------------->
@@ -784,15 +813,13 @@ int vorbis_synthesis_blockin(vorbis_dsp_state *v,vorbis_block *vb){
           const float *w=_vorbis_window_get(b->window[1]-hs);
           float *pcm=v->pcm[j]+prevCenter;
           float *p=vb->pcm[j];
-          for(i=0;i<n1;i++)
-            pcm[i]=pcm[i]*w[n1-i-1] + p[i]*w[i];
+          _vorbis_ola(pcm,p,w,n1);
         }else{
           /* large/small */
           const float *w=_vorbis_window_get(b->window[0]-hs);
           float *pcm=v->pcm[j]+prevCenter+n1/2-n0/2;
           float *p=vb->pcm[j];
-          for(i=0;i<n0;i++)
-            pcm[i]=pcm[i]*w[n0-i-1] +p[i]*w[i];
+          _vorbis_ola(pcm,p,w,n0);
         }
       }else{
         if(v->W){
@@ -800,8 +827,8 @@ int vorbis_synthesis_blockin(vorbis_dsp_state *v,vorbis_block *vb){
           const float *w=_vorbis_window_get(b->window[0]-hs);
           float *pcm=v->pcm[j]+prevCenter;
           float *p=vb->pcm[j]+n1/2-n0/2;
-          for(i=0;i<n0;i++)
-            pcm[i]=pcm[i]*w[n0-i-1] +p[i]*w[i];
+          _vorbis_ola(pcm,p,w,n0);
+          i=n0;
           for(;i<n1/2+n0/2;i++)
             pcm[i]=p[i];
         }else{
@@ -809,8 +836,7 @@ int vorbis_synthesis_blockin(vorbis_dsp_state *v,vorbis_block *vb){
           const float *w=_vorbis_window_get(b->window[0]-hs);
           float *pcm=v->pcm[j]+prevCenter;
           float *p=vb->pcm[j];
-          for(i=0;i<n0;i++)
-            pcm[i]=pcm[i]*w[n0-i-1] +p[i]*w[i];
+          _vorbis_ola(pcm,p,w,n0);
         }
       }
 

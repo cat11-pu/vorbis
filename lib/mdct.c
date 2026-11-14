@@ -45,6 +45,11 @@
 #include "os.h"
 #include "misc.h"
 
+#if defined(__SSE2__)
+#include <emmintrin.h>
+#define HAVE_SSE2 1
+#endif
+
 /* build lookups for trig functions; also pre-figure scaling and
    some window function algebra. */
 
@@ -219,9 +224,42 @@ STIN void mdct_butterfly_first(DATA_TYPE *T,
 
   DATA_TYPE *x1        = x          + points      - 8;
   DATA_TYPE *x2        = x          + (points>>1) - 8;
-  REG_TYPE   r0;
-  REG_TYPE   r1;
 
+#if defined(HAVE_SSE2)
+  do{
+    /* 4 sub-blocks per iteration; split even/odd lanes, apply the same
+       rotations, then interleave back. Trig laid out as 4 (c,s) pairs. */
+    __m128 a1lo=_mm_loadu_ps(x1), a1hi=_mm_loadu_ps(x1+4);
+    __m128 a2lo=_mm_loadu_ps(x2), a2hi=_mm_loadu_ps(x2+4);
+    __m128 x1e=_mm_shuffle_ps(a1lo,a1hi,_MM_SHUFFLE(2,0,2,0));
+    __m128 x1o=_mm_shuffle_ps(a1lo,a1hi,_MM_SHUFFLE(3,1,3,1));
+    __m128 x2e=_mm_shuffle_ps(a2lo,a2hi,_MM_SHUFFLE(2,0,2,0));
+    __m128 x2o=_mm_shuffle_ps(a2lo,a2hi,_MM_SHUFFLE(3,1,3,1));
+    /* lanes are blocks e0,e2,e4,e6; scalar gives each block a fixed
+       (c,s) pair at stride 4: e0->T[12,13] ... e6->T[0,1]. Gather to
+       match lanes exactly (no implicit block reversal). */
+    __m128 c=_mm_set_ps(T[0], T[4], T[8],  T[12]);
+    __m128 s=_mm_set_ps(T[1], T[5], T[9],  T[13]);
+    __m128 d0=_mm_sub_ps(x1e,x2e), d1=_mm_sub_ps(x1o,x2o);
+    __m128 n1e=_mm_add_ps(x1e,x2e), n1o=_mm_add_ps(x1o,x2o);
+    __m128 n2a=_mm_add_ps(_mm_mul_ps(d1,s),_mm_mul_ps(d0,c));
+    __m128 n2b=_mm_sub_ps(_mm_mul_ps(d1,c),_mm_mul_ps(d0,s));
+    /* lanes are blocks e0,e2,e4,e6; write through a small temp so the
+       output lands in ascending memory order. */
+    float te[4], to[4], ue[4], uo[4];
+    _mm_storeu_ps(te, n1e); _mm_storeu_ps(to, n1o);
+    _mm_storeu_ps(ue, n2a); _mm_storeu_ps(uo, n2b);
+    for(int k=0;k<4;k++){
+      x1[2*k]=te[k]; x1[2*k+1]=to[k];
+      x2[2*k]=ue[k]; x2[2*k+1]=uo[k];
+    }
+    x1-=8;
+    x2-=8;
+    T+=16;
+  }while(x2>=x);
+#else
+  REG_TYPE r0;
+  REG_TYPE r1;
   do{
 
                r0      = x1[6]      -  x2[6];
@@ -257,6 +295,7 @@ STIN void mdct_butterfly_first(DATA_TYPE *T,
     T+=16;
 
   }while(x2>=x);
+#endif
 }
 
 /* N/stage point generic N stage butterfly (in place, 2 register) */
@@ -267,9 +306,37 @@ STIN void mdct_butterfly_generic(DATA_TYPE *T,
 
   DATA_TYPE *x1        = x          + points      - 8;
   DATA_TYPE *x2        = x          + (points>>1) - 8;
-  REG_TYPE   r0;
-  REG_TYPE   r1;
 
+#if defined(HAVE_SSE2)
+  do{
+    __m128 a1lo=_mm_loadu_ps(x1), a1hi=_mm_loadu_ps(x1+4);
+    __m128 a2lo=_mm_loadu_ps(x2), a2hi=_mm_loadu_ps(x2+4);
+    __m128 x1e=_mm_shuffle_ps(a1lo,a1hi,_MM_SHUFFLE(2,0,2,0));
+    __m128 x1o=_mm_shuffle_ps(a1lo,a1hi,_MM_SHUFFLE(3,1,3,1));
+    __m128 x2e=_mm_shuffle_ps(a2lo,a2hi,_MM_SHUFFLE(2,0,2,0));
+    __m128 x2o=_mm_shuffle_ps(a2lo,a2hi,_MM_SHUFFLE(3,1,3,1));
+    /* scalar consumes the four (c,s) pairs in e6..e0 order, so gather
+       them reversed onto lanes (e0,e2,e4,e6); output stores forward. */
+    __m128 c=_mm_set_ps(T[0], T[trigint], T[2*trigint], T[3*trigint]);
+    __m128 s=_mm_set_ps(T[1], T[trigint+1], T[2*trigint+1], T[3*trigint+1]);
+    __m128 d0=_mm_sub_ps(x1e,x2e), d1=_mm_sub_ps(x1o,x2o);
+    __m128 n1e=_mm_add_ps(x1e,x2e), n1o=_mm_add_ps(x1o,x2o);
+    __m128 n2a=_mm_add_ps(_mm_mul_ps(d1,s),_mm_mul_ps(d0,c));
+    __m128 n2b=_mm_sub_ps(_mm_mul_ps(d1,c),_mm_mul_ps(d0,s));
+    float te[4], to[4], ue[4], uo[4];
+    _mm_storeu_ps(te, n1e); _mm_storeu_ps(to, n1o);
+    _mm_storeu_ps(ue, n2a); _mm_storeu_ps(uo, n2b);
+    for(int k=0;k<4;k++){
+      x1[2*k]=te[k]; x1[2*k+1]=to[k];
+      x2[2*k]=ue[k]; x2[2*k+1]=uo[k];
+    }
+    T+=4*trigint;
+    x1-=8;
+    x2-=8;
+  }while(x2>=x);
+#else
+  REG_TYPE r0;
+  REG_TYPE r1;
   do{
 
                r0      = x1[6]      -  x2[6];
@@ -311,6 +378,7 @@ STIN void mdct_butterfly_generic(DATA_TYPE *T,
     x2-=8;
 
   }while(x2>=x);
+#endif
 }
 
 STIN void mdct_butterflies(mdct_lookup *init,
@@ -351,6 +419,50 @@ STIN void mdct_bitreverse(mdct_lookup *init,
   DATA_TYPE *w1      = x = w0+(n>>1);
   DATA_TYPE *T       = init->trig+n;
 
+#if defined(HAVE_SSE2)
+  const __m128 half = _mm_set1_ps(0.5f);
+  do{
+    /* two independent (x0,x1) pairs per scalar iteration; gather the
+       four [0] and [1] operands into 4-lane vectors, then evaluate the
+       exact same sub/add/mul sequence per lane. */
+    float *a0 = x+bit[0], *a1 = x+bit[1];
+    float *b0 = x+bit[2], *b1 = x+bit[3];
+    __m128 x0v = _mm_set_ps(b0[1], b0[0], a0[1], a0[0]);
+    __m128 x1v = _mm_set_ps(b1[1], b1[0], a1[1], a1[0]);
+    __m128 tv = _mm_loadu_ps(T);                          /* T0 T1 T2 T3 */
+    __m128 tA = _mm_shuffle_ps(tv,tv,_MM_SHUFFLE(2,2,0,0)); /* T0 T0 T2 T2 */
+    __m128 tB = _mm_shuffle_ps(tv,tv,_MM_SHUFFLE(3,3,1,1)); /* T1 T1 T3 T3 */
+
+    __m128 x0lo = _mm_shuffle_ps(x0v,x0v,_MM_SHUFFLE(2,2,0,0)); /* x0[0] pair */
+    __m128 x0hi = _mm_shuffle_ps(x0v,x0v,_MM_SHUFFLE(3,3,1,1)); /* x0[1] pair */
+    __m128 x1lo = _mm_shuffle_ps(x1v,x1v,_MM_SHUFFLE(2,2,0,0));
+    __m128 x1hi = _mm_shuffle_ps(x1v,x1v,_MM_SHUFFLE(3,3,1,1));
+
+    __m128 d = _mm_sub_ps(x0hi, x1hi);           /* r0 = x0[1]-x1[1] */
+    __m128 s = _mm_add_ps(x0lo, x1lo);           /* r1 = x0[0]+x1[0] */
+    __m128 r2 = _mm_add_ps(_mm_mul_ps(s,tA), _mm_mul_ps(d,tB));
+    __m128 r3 = _mm_sub_ps(_mm_mul_ps(s,tB), _mm_mul_ps(d,tA));
+
+    w1 -= 4;
+    __m128 r0h = _mm_mul_ps(_mm_add_ps(x0hi,x1hi), half);
+    __m128 r1h = _mm_mul_ps(_mm_sub_ps(x0lo,x1lo), half);
+
+    /* repack (a,b) halves then interleave into scalar output order */
+    __m128 z0  = _mm_shuffle_ps(r0h, r1h, _MM_SHUFFLE(2,0,2,0));
+    __m128 z2  = _mm_shuffle_ps(r2,  r3,  _MM_SHUFFLE(2,0,2,0));
+    __m128 h01 = _mm_shuffle_ps(z0, z0, _MM_SHUFFLE(3,1,2,0)); /* r0a r1a r0b r1b */
+    __m128 r23 = _mm_shuffle_ps(z2, z2, _MM_SHUFFLE(3,1,2,0)); /* r2a r3a r2b r3b */
+    _mm_storeu_ps(w0, _mm_add_ps(h01, r23));
+    __m128 subv = _mm_sub_ps(r23, h01);
+    subv = _mm_shuffle_ps(subv, subv, _MM_SHUFFLE(1,0,3,2));
+    subv = _mm_xor_ps(subv, _mm_set_ps(0.f, -0.f, 0.f, -0.f));
+    _mm_storeu_ps(w1, subv);
+
+    T     += 4;
+    bit   += 4;
+    w0    += 4;
+  }while(w0<w1);
+#else
   do{
     DATA_TYPE *x0    = x+bit[0];
     DATA_TYPE *x1    = x+bit[1];
@@ -391,6 +503,7 @@ STIN void mdct_bitreverse(mdct_lookup *init,
               w0    += 4;
 
   }while(w0<w1);
+#endif
 }
 
 void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
@@ -404,6 +517,18 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
   DATA_TYPE *oX = out+n2+n4;
   DATA_TYPE *T  = init->trig+n4;
 
+#if defined(HAVE_SSE2)
+  do{
+    oX         -= 4;
+    /* Lane k holds exactly the two scalar products of oX[k], then one
+       add; identical operation order to the scalar path. */
+    __m128 pa = _mm_set_ps( iX[4]*T[1], -iX[6]*T[1],  iX[0]*T[3], -iX[2]*T[3]);
+    __m128 pb = _mm_set_ps(-iX[6]*T[0], -iX[4]*T[0], -iX[2]*T[2], -iX[0]*T[2]);
+    _mm_storeu_ps(oX, _mm_add_ps(pa, pb));
+    iX         -= 8;
+    T          += 4;
+  }while(iX>=in);
+#else
   do{
     oX         -= 4;
     oX[0]       = MULT_NORM(-iX[2] * T[3] - iX[0]  * T[2]);
@@ -413,11 +538,22 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
     iX         -= 8;
     T          += 4;
   }while(iX>=in);
+#endif
 
   iX            = in+n2-8;
   oX            = out+n2+n4;
   T             = init->trig+n4;
 
+#if defined(HAVE_SSE2)
+  do{
+    T          -= 4;
+    __m128 pa  = _mm_set_ps(iX[0]*T[0], iX[0]*T[1], iX[4]*T[2], iX[4]*T[3]);
+    __m128 pb  = _mm_set_ps(-iX[2]*T[1], iX[2]*T[0], -iX[6]*T[3], iX[6]*T[2]);
+    _mm_storeu_ps(oX, _mm_add_ps(pa, pb));
+    iX         -= 8;
+    oX         += 4;
+  }while(iX>=in);
+#else
   do{
     T          -= 4;
     oX[0]       =  MULT_NORM (iX[4] * T[3] + iX[6] * T[2]);
@@ -427,6 +563,7 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
     iX         -= 8;
     oX         += 4;
   }while(iX>=in);
+#endif
 
   mdct_butterflies(init,out+n2,n2);
   mdct_bitreverse(init,out);
@@ -439,6 +576,21 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
     DATA_TYPE *iX =out;
     T             =init->trig+n2;
 
+#if defined(HAVE_SSE2)
+    do{
+      oX1-=4;
+      /* oX1 lanes [3..0] and oX2 lanes [0..3], same products/order as scalar */
+      __m128 a1 = _mm_set_ps(iX[0]*T[1], iX[2]*T[3], iX[4]*T[5], iX[6]*T[7]);
+      __m128 b1 = _mm_set_ps(-iX[1]*T[0], -iX[3]*T[2], -iX[5]*T[4], -iX[7]*T[6]);
+      _mm_storeu_ps(oX1, _mm_add_ps(a1, b1));
+      __m128 a2 = _mm_set_ps(-iX[6]*T[6], -iX[4]*T[4], -iX[2]*T[2], -iX[0]*T[0]);
+      __m128 b2 = _mm_set_ps(-iX[7]*T[7], -iX[5]*T[5], -iX[3]*T[3], -iX[1]*T[1]);
+      _mm_storeu_ps(oX2, _mm_add_ps(a2, b2));
+      oX2+=4;
+      iX    +=   8;
+      T     +=   8;
+    }while(iX<oX1);
+#else
     do{
       oX1-=4;
 
@@ -458,11 +610,25 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
       iX    +=   8;
       T     +=   8;
     }while(iX<oX1);
+#endif
 
     iX=out+n2+n4;
     oX1=out+n4;
     oX2=oX1;
 
+#if defined(HAVE_SSE2)
+    do{
+      oX1-=4;
+      iX-=4;
+      /* oX1 and oX2 alias the same region; replicate the scalar's
+         in-place reversed assignment exactly, element by element. */
+      oX1[3] = iX[3]; oX2[0] = -oX1[3];
+      oX1[2] = iX[2]; oX2[1] = -oX1[2];
+      oX1[1] = iX[1]; oX2[2] = -oX1[1];
+      oX1[0] = iX[0]; oX2[3] = -oX1[0];
+      oX2+=4;
+    }while(oX2<iX);
+#else
     do{
       oX1-=4;
       iX-=4;
@@ -474,6 +640,7 @@ void mdct_backward(mdct_lookup *init, DATA_TYPE *in, DATA_TYPE *out){
 
       oX2+=4;
     }while(oX2<iX);
+#endif
 
     iX=out+n2+n4;
     oX1=out+n2+n4;
