@@ -943,6 +943,126 @@ int vorbis_synthesis_blockin(vorbis_dsp_state *v,vorbis_block *vb){
 
 }
 
+/* Packet-loss concealment entry point.
+
+   The transport layer calls this once, in order, for every whole audio
+   packet confirmed lost, and before feeding the next good packet to
+   vorbis_synthesis()/vorbis_synthesis_blockin().  A lost packet is
+   treated as a silent block of the same geometry as the preceding one:
+   the retained overlap half is windowed out (fade to silence) and a
+   zeroed half is stored in its place, so the next real block overlaps
+   pure silence instead of stale state.  Ring-buffer geometry, centerW
+   toggling and sample/sequence bookkeeping are kept identical to
+   vorbis_synthesis_blockin(), which keeps every slot position aligned
+   with the lossless decode; once real packets resume the output is
+   bit-identical to an intact stream apart from the concealed gap. */
+int vorbis_synthesis_loss_notify(vorbis_dsp_state *v){
+  vorbis_info *vi;
+  codec_setup_info *ci;
+  private_state *b;
+  int i,j;
+
+  if(!v || !v->vi || !v->vi->codec_setup || !v->backend_state)
+    return(OV_EINVAL);
+
+  /* mirror blockin(): nothing accepted before the first real block, nor
+     while decoded PCM is still waiting to be read */
+  if(v->pcm_returned==-1)return(OV_EINVAL);
+  if(v->pcm_current>v->pcm_returned)return(OV_EINVAL);
+
+  vi=v->vi;
+  ci=vi->codec_setup;
+  b=v->backend_state;
+  int hs=ci->halfrate_flag;
+
+  {
+    int W=v->W;              /* assume the lost block matched the last */
+    int n=ci->blocksizes[W]>>(hs+1);
+    int n0=ci->blocksizes[0]>>(hs+1);
+    int n1=ci->blocksizes[1]>>(hs+1);
+    int thisCenter;
+    int prevCenter;
+
+    v->lW=v->W;
+    v->nW=-1;
+
+    /* a hole breaks packet sequence; drop the absolute-position anchor
+       exactly as blockin() does on a sequence discontinuity */
+    v->granulepos=-1;
+    b->sample_count=-1;
+    v->sequence++;
+
+    if(v->centerW){
+      thisCenter=n1;
+      prevCenter=0;
+    }else{
+      thisCenter=0;
+      prevCenter=n1;
+    }
+
+    for(j=0;j<vi->channels;j++){
+      /* overlap/add against the retained half; the incoming block is
+         silent, so this only windows the retained samples out */
+      if(v->lW){
+        if(W){
+          /* large/large */
+          const float *w=_vorbis_window_get(b->window[1]-hs);
+          float *pcm=v->pcm[j]+prevCenter;
+          for(i=0;i<n1;i++)
+            pcm[i]=pcm[i]*w[n1-i-1];
+        }else{
+          /* large/small */
+          const float *w=_vorbis_window_get(b->window[0]-hs);
+          float *pcm=v->pcm[j]+prevCenter+n1/2-n0/2;
+          for(i=0;i<n0;i++)
+            pcm[i]=pcm[i]*w[n0-i-1];
+          for(i=0;i<n1/2-n0/2;i++)
+            pcm[i]=0.0f;
+          for(i=n1/2+n0/2;i<n1;i++)
+            pcm[i]=0.0f;
+        }
+      }else{
+        if(W){
+          /* small/large: zero the whole output slot, the retained half
+             being the short central window region */
+          float *pcm=v->pcm[j]+prevCenter;
+          for(i=0;i<n1;i++)
+            pcm[i]=0.0f;
+        }else{
+          /* small/small */
+          const float *w=_vorbis_window_get(b->window[0]-hs);
+          float *pcm=v->pcm[j]+prevCenter;
+          for(i=0;i<n0;i++)
+            pcm[i]=pcm[i]*w[n0-i-1];
+        }
+      }
+
+      /* the copy section: the silent incoming block stores a zeroed
+         retained half for the next (real) block to overlap */
+      {
+        float *pcm=v->pcm[j]+thisCenter;
+        for(i=0;i<n;i++)
+          pcm[i]=0.0f;
+      }
+    }
+
+    if(v->centerW)
+      v->centerW=0;
+    else
+      v->centerW=n1;
+
+    v->pcm_returned=prevCenter;
+    v->pcm_current=prevCenter+
+      ((ci->blocksizes[v->lW]/4+
+      ci->blocksizes[W]/4)>>hs);
+
+    /* sample accounting, identical step to a real block of this size */
+    b->sample_count=0;
+  }
+
+  return(0);
+}
+
 /* pcm==NULL indicates we just want the pending samples, no more */
 int vorbis_synthesis_pcmout(vorbis_dsp_state *v,float ***pcm){
   vorbis_info *vi=v->vi;

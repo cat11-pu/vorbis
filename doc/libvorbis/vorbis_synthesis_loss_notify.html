@@ -1,0 +1,83 @@
+<html>
+
+<head>
+<title>libvorbis - function - vorbis_synthesis_loss_notify</title>
+<link rel=stylesheet href="style.css" type="text/css">
+</head>
+
+<body bgcolor=white text=black link="#5555ff" alink="#5555ff" vlink="#5555ff">
+<table border=0 width=100%>
+<tr>
+<td><p class=tiny>libvorbis documentation</p></td>
+<td align=right><p class=tiny>libvorbis version 1.3.2 - 20101101</p></td>
+</tr>
+</table>
+
+<h1>vorbis_synthesis_loss_notify</h1>
+
+<p><i>declared in "vorbis/codec.h";</i></p>
+
+<p>This function performs packet-loss concealment on a decoding
+<a href="vorbis_dsp_state.html">vorbis_dsp_state</a>. It is called once,
+in stream order, for every whole audio packet that the transport has
+confirmed lost, and before the next successfully received packet is passed
+to <a href="vorbis_synthesis.html">vorbis_synthesis</a>() and
+<a href="vorbis_synthesis_blockin.html">vorbis_synthesis_blockin</a>().
+For a run of consecutive losses it is called once per lost frame; any PCM
+made available by each call must be drained with
+<a href="vorbis_synthesis_pcmout.html">vorbis_synthesis_pcmout</a>() /
+<a href="vorbis_synthesis_read.html">vorbis_synthesis_read</a>() before
+the next notification.</p>
+
+<p>The lost frame is treated as a silent block of the same geometry as the
+preceding block. The retained overlap half is windowed out so the output
+fades smoothly to silence, and a zeroed half is stored for the next real
+block to overlap. Ring-buffer geometry, center-window toggling and sample
+accounting are kept identical to
+<a href="vorbis_synthesis_blockin.html">vorbis_synthesis_blockin</a>(),
+so the output timeline keeps its length and, once real packets resume,
+decoded samples are bit-identical to an intact stream apart from the
+concealed gap itself.</p>
+
+<table border=0 color=black cellspacing=0 cellpadding=7>
+<tr bgcolor=#cccccc>
+	<td>
+<pre><b>
+extern int      vorbis_synthesis_loss_notify(vorbis_dsp_state *v);
+</b></pre>
+	</td>
+</tr>
+</table>
+
+<h3>Parameters</h3>
+<dl>
+<dt><i>v</i></dt>
+<dd>The decoding <a href="vorbis_dsp_state.html">vorbis_dsp_state</a>
+in which a frame was lost.</dd>
+</dl>
+
+
+<h3>Return Values</h3>
+<blockquote>
+<li>0 on success.</li>
+<li>OV_EINVAL if called before the first real block, or while decoded PCM
+is still waiting to be read.</li>
+</blockquote>
+<p>
+
+<br><br>
+<hr noshade>
+<table border=0 width=100%>
+<tr valign=top>
+<td><p class=tiny>copyright &copy; 2010 Xiph.Org</p></td>
+<td align=right><p class=tiny><a href="https://xiph.org/vorbis/">Ogg Vorbis</a></p></td>
+</tr><tr>
+<td><p class=tiny>libvorbis documentation</p></td>
+<td align=right><p class=tiny>libvorbis version 1.3.2 - 20101101</p></td>
+</tr>
+</table>
+
+
+</body>
+
+</html>

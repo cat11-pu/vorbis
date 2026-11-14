@@ -208,6 +208,7 @@ extern int      vorbis_synthesis_restart(vorbis_dsp_state *v);
 extern int      vorbis_synthesis(vorbis_block *vb,ogg_packet *op);
 extern int      vorbis_synthesis_trackonly(vorbis_block *vb,ogg_packet *op);
 extern int      vorbis_synthesis_blockin(vorbis_dsp_state *v,vorbis_block *vb);
+extern int      vorbis_synthesis_loss_notify(vorbis_dsp_state *v);
 extern int      vorbis_synthesis_pcmout(vorbis_dsp_state *v,float ***pcm);
 extern int      vorbis_synthesis_lapout(vorbis_dsp_state *v,float ***pcm);
 extern int      vorbis_synthesis_read(vorbis_dsp_state *v,int samples);

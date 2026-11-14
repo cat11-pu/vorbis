@@ -16,7 +16,8 @@ doc_DATA = index.html reference.html style.css vorbis_comment.html\
   vorbis_synthesis_blockin.html vorbis_synthesis_halfrate.html \
   vorbis_synthesis_halfrate_p.html vorbis_synthesis_headerin.html \
   vorbis_synthesis_idheader.html vorbis_synthesis_init.html \
-  vorbis_synthesis_lapout.html vorbis_synthesis_pcmout.html \
+  vorbis_synthesis_lapout.html vorbis_synthesis_loss_notify.html \
+  vorbis_synthesis_pcmout.html \
   vorbis_synthesis_read.html vorbis_synthesis_restart.html \
   vorbis_synthesis_trackonly.html vorbis_block.html vorbis_dsp_state.html \
   return.html overview.html
