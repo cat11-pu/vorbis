@@ -1,0 +1,2 @@
+CASE 88 cat=trunc pkts=17 mutpkt=4 mutoff=35 mutoff2=122 mutcnt=1
+DONE case=88 cat=trunc fails=0

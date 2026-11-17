@@ -1,0 +1,2 @@
+CASE 3 cat=bigblock pkts=26 mutpkt=4 mutoff=0 mutoff2=65536 mutcnt=2
+DONE case=3 cat=bigblock fails=0

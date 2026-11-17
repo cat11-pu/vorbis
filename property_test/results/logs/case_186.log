@@ -1,0 +1,4 @@
+CASE 186 cat=duphdr pkts=19 mutpkt=2 mutoff=0 mutoff2=3497 mutcnt=2
+FAIL case=186 cat=duphdr pkt=3 stage=synth rc=OV_EBADPACKET mutoff=0 pktlen=3497
+FAIL case=186 cat=duphdr pkt=4 stage=synth rc=OV_EBADPACKET mutoff=0 pktlen=3497
+DONE case=186 cat=duphdr fails=2

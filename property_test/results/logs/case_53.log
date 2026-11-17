@@ -1,0 +1,14 @@
+CASE 53 cat=codebook pkts=14 mutpkt=2 mutoff=49 mutoff2=186 mutcnt=15
+FAIL case=53 cat=codebook pkt=2 stage=header rc=-133 mutoff=49 pktlen=2476
+FAIL case=53 cat=codebook pkt=3 stage=header rc=-132 mutoff=49 pktlen=37
+FAIL case=53 cat=codebook pkt=4 stage=header rc=-132 mutoff=49 pktlen=36
+FAIL case=53 cat=codebook pkt=5 stage=header rc=-132 mutoff=49 pktlen=34
+FAIL case=53 cat=codebook pkt=6 stage=header rc=-132 mutoff=49 pktlen=36
+FAIL case=53 cat=codebook pkt=7 stage=header rc=-132 mutoff=49 pktlen=37
+FAIL case=53 cat=codebook pkt=8 stage=header rc=-132 mutoff=49 pktlen=35
+FAIL case=53 cat=codebook pkt=9 stage=header rc=-132 mutoff=49 pktlen=39
+FAIL case=53 cat=codebook pkt=10 stage=header rc=-132 mutoff=49 pktlen=33
+FAIL case=53 cat=codebook pkt=11 stage=header rc=-132 mutoff=49 pktlen=35
+FAIL case=53 cat=codebook pkt=12 stage=header rc=-132 mutoff=49 pktlen=37
+FAIL case=53 cat=codebook pkt=13 stage=header rc=-132 mutoff=49 pktlen=33
+DONE case=53 cat=codebook fails=12

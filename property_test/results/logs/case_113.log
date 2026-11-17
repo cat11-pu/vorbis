@@ -1,0 +1,2 @@
+CASE 113 cat=codebook pkts=15 mutpkt=2 mutoff=954 mutoff2=1744 mutcnt=15
+DONE case=113 cat=codebook fails=0

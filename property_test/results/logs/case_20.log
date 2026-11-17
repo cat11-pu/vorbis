@@ -1,0 +1,2 @@
+CASE 20 cat=trunc pkts=14 mutpkt=9 mutoff=12 mutoff2=37 mutcnt=1
+DONE case=20 cat=trunc fails=0

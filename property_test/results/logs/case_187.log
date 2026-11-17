@@ -1,0 +1,2 @@
+CASE 187 cat=bigblock pkts=19 mutpkt=3 mutoff=0 mutoff2=262144 mutcnt=2
+DONE case=187 cat=bigblock fails=0

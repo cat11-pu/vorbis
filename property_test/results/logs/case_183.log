@@ -1,0 +1,4 @@
+CASE 183 cat=bigblock pkts=16 mutpkt=1 mutoff=0 mutoff2=4096 mutcnt=2
+FAIL case=183 cat=bigblock pkt=1 stage=header rc=-132 mutoff=0 pktlen=4096
+FAIL case=183 cat=bigblock pkt=2 stage=header rc=-132 mutoff=0 pktlen=4096
+DONE case=183 cat=bigblock fails=2

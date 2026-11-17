@@ -1,0 +1,18 @@
+CASE 184 cat=trunc pkts=17 mutpkt=1 mutoff=10 mutoff2=93 mutcnt=1
+FAIL case=184 cat=trunc pkt=1 stage=header rc=-133 mutoff=10 pktlen=10
+FAIL case=184 cat=trunc pkt=2 stage=header rc=-133 mutoff=10 pktlen=3497
+FAIL case=184 cat=trunc pkt=3 stage=header rc=-132 mutoff=10 pktlen=115
+FAIL case=184 cat=trunc pkt=4 stage=header rc=-132 mutoff=10 pktlen=115
+FAIL case=184 cat=trunc pkt=5 stage=header rc=-132 mutoff=10 pktlen=138
+FAIL case=184 cat=trunc pkt=6 stage=header rc=-132 mutoff=10 pktlen=126
+FAIL case=184 cat=trunc pkt=7 stage=header rc=-132 mutoff=10 pktlen=124
+FAIL case=184 cat=trunc pkt=8 stage=header rc=-132 mutoff=10 pktlen=129
+FAIL case=184 cat=trunc pkt=9 stage=header rc=-132 mutoff=10 pktlen=126
+FAIL case=184 cat=trunc pkt=10 stage=header rc=-132 mutoff=10 pktlen=132
+FAIL case=184 cat=trunc pkt=11 stage=header rc=-132 mutoff=10 pktlen=127
+FAIL case=184 cat=trunc pkt=12 stage=header rc=-132 mutoff=10 pktlen=121
+FAIL case=184 cat=trunc pkt=13 stage=header rc=-132 mutoff=10 pktlen=125
+FAIL case=184 cat=trunc pkt=14 stage=header rc=-132 mutoff=10 pktlen=76
+FAIL case=184 cat=trunc pkt=15 stage=header rc=-132 mutoff=10 pktlen=130
+FAIL case=184 cat=trunc pkt=16 stage=header rc=-132 mutoff=10 pktlen=133
+DONE case=184 cat=trunc fails=16

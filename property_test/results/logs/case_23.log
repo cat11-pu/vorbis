@@ -1,0 +1,4 @@
+CASE 23 cat=bigblock pkts=17 mutpkt=4 mutoff=0 mutoff2=262144 mutcnt=3
+FAIL case=23 cat=bigblock pkt=4 stage=synth rc=OV_EBADPACKET mutoff=0 pktlen=262144
+FAIL case=23 cat=bigblock pkt=6 stage=synth rc=OV_EBADPACKET mutoff=0 pktlen=262144
+DONE case=23 cat=bigblock fails=2

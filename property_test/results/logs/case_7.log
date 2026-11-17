@@ -1,0 +1,2 @@
+CASE 7 cat=bigblock pkts=22 mutpkt=5 mutoff=0 mutoff2=1048576 mutcnt=1
+DONE case=7 cat=bigblock fails=0

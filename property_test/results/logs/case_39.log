@@ -1,0 +1,2 @@
+CASE 39 cat=bigblock pkts=22 mutpkt=5 mutoff=0 mutoff2=4096 mutcnt=1
+DONE case=39 cat=bigblock fails=0

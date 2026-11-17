@@ -1,0 +1,5 @@
+CASE 2 cat=duphdr pkts=27 mutpkt=0 mutoff=0 mutoff2=30 mutcnt=3
+FAIL case=2 cat=duphdr pkt=1 stage=header rc=-133 mutoff=0 pktlen=30
+FAIL case=2 cat=duphdr pkt=2 stage=header rc=-133 mutoff=0 pktlen=30
+FAIL case=2 cat=duphdr pkt=3 stage=header rc=-133 mutoff=0 pktlen=30
+DONE case=2 cat=duphdr fails=3
