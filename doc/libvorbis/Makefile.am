@@ -19,6 +19,7 @@ doc_DATA = index.html reference.html style.css vorbis_comment.html\
   vorbis_synthesis_lapout.html vorbis_synthesis_pcmout.html \
   vorbis_synthesis_read.html vorbis_synthesis_restart.html \
   vorbis_synthesis_trackonly.html vorbis_block.html vorbis_dsp_state.html \
+  vorbis_reuse.html \
   return.html overview.html
 
 EXTRA_DIST = $(doc_DATA)

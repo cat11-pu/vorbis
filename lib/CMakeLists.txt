@@ -1,5 +1,6 @@
 set(VORBIS_PUBLIC_HEADERS
     ../include/vorbis/codec.h
+    ../include/vorbis/reuse.h
     ../include/vorbis/vorbisenc.h
     ../include/vorbis/vorbisfile.h
 )
@@ -47,6 +48,7 @@ set(VORBIS_SOURCES
     sharedbook.c
     lookup.c
     bitrate.c
+    reuse.c
 )
 
 set(VORBISFILE_SOURCES

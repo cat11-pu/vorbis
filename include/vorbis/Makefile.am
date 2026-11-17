@@ -2,6 +2,5 @@
 
 vorbisincludedir = $(includedir)/vorbis
 
-vorbisinclude_HEADERS = codec.h vorbisfile.h vorbisenc.h
-
+vorbisinclude_HEADERS = codec.h vorbisfile.h vorbisenc.h reuse.h
 

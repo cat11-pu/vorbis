@@ -1,0 +1,101 @@
+<html>
+
+<head>
+<title>libvorbis - interface - reusable track decoder</title>
+<link rel=stylesheet href="style.css" type="text/css">
+</head>
+
+<body bgcolor=white text=black link="#5555ff" alink="#5555ff" vlink="#5555ff">
+<table border=0 width=100%>
+<tr>
+<td><p class=tiny>libvorbis documentation</p></td>
+<td align=right><p class=tiny>libvorbis version 1.3.7 - 20261118</p></td>
+</tr>
+</table>
+
+<h1>Reusable track decoder</h1>
+
+<p><i>declared in "vorbis/reuse.h";</i></p>
+
+<p>These functions decode a sequence of complete Vorbis tracks through
+one <i>vorbis_reuse_decoder</i>.  When the next track has the same
+identification parameters and a byte-identical setup packet, the
+codebooks, floor/residue lookups, transforms, and PCM allocation are
+retained.  Only the PCM overlap buffer, timeline counters, and block
+scratch storage are reset.  A changed setup rebuilds the decoder.</p>
+
+<p>The setup packet comparison is intentionally exact: a false match
+would silently decode with the wrong codebooks.  Semantically
+equivalent but differently packed setup headers therefore take the
+rebuild path.</p>
+
+<table border=0 color=black cellspacing=0 cellpadding=7>
+<tr bgcolor=#cccccc>
+	<td>
+<pre><b>
+typedef struct vorbis_reuse_decoder vorbis_reuse_decoder;
+
+typedef struct vorbis_reuse_stats{
+  unsigned long long tracks;
+  unsigned long long setup_reused;
+  unsigned long long setup_rebuilt;
+  unsigned long long blocks;
+  unsigned long long samples;
+} vorbis_reuse_stats;
+
+vorbis_reuse_decoder *vorbis_reuse_new(void);
+void vorbis_reuse_free(vorbis_reuse_decoder *r);
+int  vorbis_reuse_headerin(vorbis_reuse_decoder *r, ogg_packet *op);
+const vorbis_info *vorbis_reuse_info(const vorbis_reuse_decoder *r);
+int  vorbis_reuse_decode(vorbis_reuse_decoder *r, ogg_packet *op);
+int  vorbis_reuse_pcmout(vorbis_reuse_decoder *r, float ***pcm);
+int  vorbis_reuse_read(vorbis_reuse_decoder *r, int n);
+void vorbis_reuse_getstats(const vorbis_reuse_decoder *r,
+                           vorbis_reuse_stats *stats);
+</b></pre>
+	</td>
+</tr>
+</table>
+
+<h3>Track protocol</h3>
+<ol>
+<li>For each track, pass identification, comment, and setup packets in
+stream order to <i>vorbis_reuse_headerin()</i>.</li>
+<li>Decode audio packets with <i>vorbis_reuse_decode()</i>, pulling PCM
+with <i>vorbis_reuse_pcmout()</i> and consuming it with
+<i>vorbis_reuse_read()</i>.</li>
+<li>Drain all PCM before the next identification packet.  A switch with
+unread PCM returns <tt>OV_EINVAL</tt>.</li>
+</ol>
+
+<p>Codebook and residual state are never used across a track boundary.
+After reuse, the first audio block starts from the same zeroed overlap
+state as a newly initialized decoder, so output is sample-identical to
+a full re-decode of the track.</p>
+
+<h3>Errors and edge cases</h3>
+<blockquote>
+<li>Headers out of order or a duplicate setup return
+<tt>OV_EBADHEADER</tt>.</li>
+<li>A changed setup that fails to parse leaves the previous codebooks
+allocated; a subsequent valid track can still use or replace them.</li>
+<li>A track with headers but no audio packets is valid and yields no
+PCM.</li>
+<li><i>vorbis_reuse_free(NULL)</i> is safe.</li>
+</blockquote>
+
+<br><br>
+<hr noshade>
+<table border=0 width=100%>
+<tr valign=top>
+<td><p class=tiny>copyright &copy; 2026 Xiph.Org</p></td>
+<td align=right><p class=tiny><a href="https://xiph.org/vorbis/">Ogg Vorbis</a></p></td>
+</tr><tr>
+<td><p class=tiny>libvorbis documentation</p></td>
+<td align=right><p class=tiny>libvorbis version 1.3.7 - 20261118</p></td>
+</tr>
+</table>
+
+</body>
+
+</html>
