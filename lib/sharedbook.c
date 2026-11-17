@@ -533,7 +533,7 @@ int vorbis_book_init_decode(dec_codebook *c){
       int used_bits;
       int tabn;
       used_bits=ov_ilog(n);
-      c->firsttablen=(signed char)(used_bits-4); /* this is magic */
+      c->firsttablen=(signed char)(used_bits+2);
       if(c->firsttablen<5)c->firsttablen=5;
       /* if the codewords all have similar lengths, we might wind up with a
          table smaller than the shorter codes: increase the size or we could
@@ -548,7 +548,7 @@ int vorbis_book_init_decode(dec_codebook *c){
          enough to get a good guess for the codeword length. */
       if(c->codelengths==NULL && c->minlength>8)
         c->firsttablen=c->maxlength-c->minlength+1;
-      if(c->firsttablen>8)c->firsttablen=8;
+      if(c->firsttablen>10)c->firsttablen=10;
 
       tabn=1<<c->firsttablen;
       c->firsttable=_ogg_calloc(tabn,sizeof(*c->firsttable));

@@ -45,7 +45,10 @@ typedef struct {
   int          **partbooks;
 
   int            partvals;
-  int          **decodemap;
+  int           *decodemap;
+  dec_codebook **stagebooks;
+
+  int           *partword;
 
   long           postbits;
   long           phrasebits;
@@ -140,9 +143,9 @@ void res0_free_look(vorbis_look_residue *i){
     for(j=0;j<look->parts;j++)
       if(look->partbooks[j])_ogg_free(look->partbooks[j]);
     _ogg_free(look->partbooks);
-    for(j=0;j<look->partvals;j++)
-      _ogg_free(look->decodemap[j]);
     _ogg_free(look->decodemap);
+    _ogg_free(look->stagebooks);
+    _ogg_free(look->partword);
 
     memset(look,0,sizeof(*look));
     _ogg_free(look);
@@ -297,16 +300,46 @@ vorbis_look_residue *res0_look(vorbis_dsp_state *vd,
       look->partvals*=look->parts;
 
   look->stages=maxstage;
-  look->decodemap=_ogg_malloc(look->partvals*sizeof(*look->decodemap));
+  look->decodemap=_ogg_malloc(look->partvals*dim*sizeof(*look->decodemap));
   for(j=0;j<look->partvals;j++){
     long val=j;
     long mult=look->partvals/look->parts;
-    look->decodemap[j]=_ogg_malloc(dim*sizeof(*look->decodemap[j]));
+    int *deco=look->decodemap+j*dim;
     for(k=0;k<dim;k++){
-      long deco=val/mult;
-      val-=deco*mult;
+      long part=val/mult;
+      val-=part*mult;
       mult/=look->parts;
-      look->decodemap[j][k]=deco;
+      deco[k]=(int)part;
+    }
+  }
+
+  if(ci->decbooks){
+    look->stagebooks=
+      _ogg_calloc(look->parts*look->stages,sizeof(*look->stagebooks));
+    acc=0;
+    for(j=0;j<look->parts;j++)
+      for(k=0;k<look->stages;k++)
+        if(info->secondstages[j]&(1<<k)){
+          int booknum=info->booklist[acc++];
+          look->stagebooks[k*look->parts+j]=ci->decbooks+booknum;
+        }
+
+    {
+      int chans=vd->vi->channels;
+      int maxend=ci->blocksizes[1]>>1;
+      int end=info->end<maxend?info->end:maxend;
+      int partvals=end>info->begin?
+        (end-info->begin)/info->grouping:0;
+      int partwords=(partvals+dim-1)/dim;
+      int words=partwords*chans;
+
+      end=info->end<maxend*chans?info->end:maxend*chans;
+      partvals=end>info->begin?
+        (end-info->begin)/info->grouping:0;
+      partwords=(partvals+dim-1)/dim;
+      if(partwords>words)words=partwords;
+
+      if(words)look->partword=_ogg_malloc(words*sizeof(*look->partword));
     }
   }
 #if defined(TRAIN_RES) || defined (TRAIN_RESAUX)
@@ -668,12 +701,10 @@ static int _01inverse(vorbis_block *vb,vorbis_look_residue *vl,
   if(n>0){
     int partvals=n/samples_per_partition;
     int partwords=(partvals+partitions_per_word-1)/partitions_per_word;
-    int ***partword=alloca(ch*sizeof(*partword));
-
-    for(j=0;j<ch;j++)
-      partword[j]=_vorbis_block_alloc(vb,partwords*sizeof(*partword[j]));
+    int *partword=look->partword;
 
     for(s=0;s<look->stages;s++){
+      dec_codebook *const *stagebooks=look->stagebooks+s*look->parts;
 
       /* each loop decodes on partition codeword containing
          partitions_per_word partitions */
@@ -684,28 +715,27 @@ static int _01inverse(vorbis_block *vb,vorbis_look_residue *vl,
             int temp=vorbis_book_decode(phrasebook,&vb->opb);
 
             if(temp==-1 || temp>=info->partvals)goto eopbreak;
-            partword[j][l]=look->decodemap[temp];
-            if(partword[j][l]==NULL)goto errout;
+            partword[j*partwords+l]=temp;
           }
         }
 
         /* now we decode residual values for the partitions */
-        for(k=0;k<partitions_per_word && i<partvals;k++,i++)
+        for(k=0;k<partitions_per_word && i<partvals;k++,i++){
+          long offset=info->begin+i*samples_per_partition;
           for(j=0;j<ch;j++){
-            long offset=info->begin+i*samples_per_partition;
-            if(info->secondstages[partword[j][l][k]]&(1<<s)){
-              int stagebooknum=look->partbooks[partword[j][l][k]][s];
-              if(stagebooknum>=0){
-                dec_codebook *stagebook=look->decbooks+stagebooknum;
-                if(decodepart(stagebook,in[j]+offset,&vb->opb,
-                              samples_per_partition)==-1)goto eopbreak;
-              }
+            const int *classes=
+              look->decodemap+partword[j*partwords+l]*partitions_per_word;
+            dec_codebook *stagebook=
+              stagebooks[classes[k]];
+            if(stagebook){
+              if(decodepart(stagebook,in[j]+offset,&vb->opb,
+                            samples_per_partition)==-1)goto eopbreak;
             }
           }
+        }
       }
     }
   }
- errout:
  eopbreak:
   return(0);
 }
@@ -826,39 +856,39 @@ int res2_inverse(vorbis_block *vb,vorbis_look_residue *vl,
   if(n>0){
     int partvals=n/samples_per_partition;
     int partwords=(partvals+partitions_per_word-1)/partitions_per_word;
-    int **partword=_vorbis_block_alloc(vb,partwords*sizeof(*partword));
+    int *partword=look->partword;
 
     for(i=0;i<ch;i++)if(nonzero[i])break;
     if(i==ch)return(0); /* no nonzero vectors */
 
     for(s=0;s<look->stages;s++){
+      dec_codebook *const *stagebooks=look->stagebooks+s*look->parts;
       for(i=0,l=0;i<partvals;l++){
 
         if(s==0){
           /* fetch the partition word */
           int temp=vorbis_book_decode(phrasebook,&vb->opb);
           if(temp==-1 || temp>=info->partvals)goto eopbreak;
-          partword[l]=look->decodemap[temp];
-          if(partword[l]==NULL)goto errout;
+          partword[l]=temp;
         }
 
         /* now we decode residual values for the partitions */
-        for(k=0;k<partitions_per_word && i<partvals;k++,i++)
-          if(info->secondstages[partword[l][k]]&(1<<s)){
-            int stagebooknum=look->partbooks[partword[l][k]][s];
-
-            if(stagebooknum>=0){
-              dec_codebook *stagebook=look->decbooks+stagebooknum;
-              if(vorbis_book_decodevv_add(stagebook,in,
-                                          i*samples_per_partition+info->begin,ch,
-                                          &vb->opb,samples_per_partition)==-1)
-                goto eopbreak;
-            }
+        {
+          const int *classes=
+            look->decodemap+partword[l]*partitions_per_word;
+        for(k=0;k<partitions_per_word && i<partvals;k++,i++){
+          dec_codebook *stagebook=stagebooks[classes[k]];
+          if(stagebook){
+            if(vorbis_book_decodevv_add(stagebook,in,
+                                        i*samples_per_partition+info->begin,ch,
+                                        &vb->opb,samples_per_partition)==-1)
+              goto eopbreak;
           }
+        }
+        }
       }
     }
   }
- errout:
  eopbreak:
   return(0);
 }

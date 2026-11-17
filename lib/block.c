@@ -724,6 +724,30 @@ int vorbis_synthesis_init(vorbis_dsp_state *v,vorbis_info *vi){
   return 0;
 }
 
+static void _vorbis_ola(float **pcm,float **p,int ch,int pcmoff,int poff,
+                        int len,const float *w){
+  int i,j;
+  if(ch==2){
+    float *pcm0=pcm[0]+pcmoff;
+    float *pcm1=pcm[1]+pcmoff;
+    const float *p0=p[0]+poff;
+    const float *p1=p[1]+poff;
+    for(i=0;i<len;i++){
+      float wf=w[i];
+      float wb=w[len-i-1];
+      pcm0[i]=pcm0[i]*wb+p0[i]*wf;
+      pcm1[i]=pcm1[i]*wb+p1[i]*wf;
+    }
+  }else{
+    for(j=0;j<ch;j++){
+      float *pcmj=pcm[j]+pcmoff;
+      const float *pj=p[j]+poff;
+      for(i=0;i<len;i++)
+        pcmj[i]=pcmj[i]*w[len-i-1]+pj[i]*w[i];
+    }
+  }
+}
+
 /* Unlike in analysis, the window is only partially applied for each
    block.  The time domain envelope is not yet handled at the point of
    calling (as it relies on the previous block). */
@@ -733,7 +757,7 @@ int vorbis_synthesis_blockin(vorbis_dsp_state *v,vorbis_block *vb){
   codec_setup_info *ci=vi->codec_setup;
   private_state *b=v->backend_state;
   int hs=ci->halfrate_flag;
-  int i,j;
+  int j;
 
   if(!vb)return(OV_EINVAL);
   if(v->pcm_current>v->pcm_returned  && v->pcm_returned!=-1)return(OV_EINVAL);
@@ -776,51 +800,38 @@ int vorbis_synthesis_blockin(vorbis_dsp_state *v,vorbis_block *vb){
        to have to constantly shift *or* adjust memory usage.  Don't
        accept a new block until the old is shifted out */
 
-    for(j=0;j<vi->channels;j++){
-      /* the overlap/add section */
-      if(v->lW){
-        if(v->W){
-          /* large/large */
-          const float *w=_vorbis_window_get(b->window[1]-hs);
-          float *pcm=v->pcm[j]+prevCenter;
-          float *p=vb->pcm[j];
-          for(i=0;i<n1;i++)
-            pcm[i]=pcm[i]*w[n1-i-1] + p[i]*w[i];
-        }else{
-          /* large/small */
-          const float *w=_vorbis_window_get(b->window[0]-hs);
-          float *pcm=v->pcm[j]+prevCenter+n1/2-n0/2;
-          float *p=vb->pcm[j];
-          for(i=0;i<n0;i++)
-            pcm[i]=pcm[i]*w[n0-i-1] +p[i]*w[i];
-        }
+    /* the overlap/add section */
+    if(v->lW){
+      if(v->W){
+        /* large/large */
+        const float *w=_vorbis_window_get(b->window[1]-hs);
+        _vorbis_ola(v->pcm,vb->pcm,vi->channels,prevCenter,0,n1,w);
       }else{
-        if(v->W){
-          /* small/large */
-          const float *w=_vorbis_window_get(b->window[0]-hs);
-          float *pcm=v->pcm[j]+prevCenter;
-          float *p=vb->pcm[j]+n1/2-n0/2;
-          for(i=0;i<n0;i++)
-            pcm[i]=pcm[i]*w[n0-i-1] +p[i]*w[i];
-          for(;i<n1/2+n0/2;i++)
-            pcm[i]=p[i];
-        }else{
-          /* small/small */
-          const float *w=_vorbis_window_get(b->window[0]-hs);
-          float *pcm=v->pcm[j]+prevCenter;
-          float *p=vb->pcm[j];
-          for(i=0;i<n0;i++)
-            pcm[i]=pcm[i]*w[n0-i-1] +p[i]*w[i];
-        }
+        /* large/small */
+        const float *w=_vorbis_window_get(b->window[0]-hs);
+        _vorbis_ola(v->pcm,vb->pcm,vi->channels,
+                    prevCenter+n1/2-n0/2,0,n0,w);
       }
+    }else{
+      if(v->W){
+        /* small/large */
+        const float *w=_vorbis_window_get(b->window[0]-hs);
+        _vorbis_ola(v->pcm,vb->pcm,vi->channels,prevCenter,n1/2-n0/2,
+                    n0,w);
+        for(j=0;j<vi->channels;j++)
+          memcpy(v->pcm[j]+prevCenter+n0,
+                 vb->pcm[j]+n1/2-n0/2+n0,
+                 (n1/2-n0/2)*sizeof(*v->pcm[j]));
+      }else{
+        /* small/small */
+        const float *w=_vorbis_window_get(b->window[0]-hs);
+        _vorbis_ola(v->pcm,vb->pcm,vi->channels,prevCenter,0,n0,w);
+      }
+    }
 
-      /* the copy section */
-      {
-        float *pcm=v->pcm[j]+thisCenter;
-        float *p=vb->pcm[j]+n;
-        for(i=0;i<n;i++)
-          pcm[i]=p[i];
-      }
+    /* the copy section */
+    for(j=0;j<vi->channels;j++){
+      memcpy(v->pcm[j]+thisCenter,vb->pcm[j]+n,n*sizeof(*v->pcm[j]));
     }
 
     if(v->centerW)

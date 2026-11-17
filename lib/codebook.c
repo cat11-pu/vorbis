@@ -474,8 +474,60 @@ long vorbis_book_decodevv_add(dec_codebook *book,float **a,long offset,int ch,
 
   long i,j,entry;
   int chptr=0;
+  int m;
   if(book->codelist){
-    int m=(offset+n)/ch;
+    if(ch==1){
+      long end=offset+n;
+      for(i=offset;i<end;){
+        entry=decode_packed_entry_number(book,b);
+        if(entry==-1)return(-1);
+        {
+          const float *t=book->valuelist+entry*book->dim;
+          for(j=0;i<end && j<book->dim;j++)
+            a[0][i++]+=t[j];
+        }
+      }
+      return(0);
+    }
+    if(ch==2 && book->dim>0 && !(offset&1) && !(n&1) &&
+       !(book->dim&1) &&
+       !(n%book->dim)){
+      long end=offset+n;
+      for(i=offset;i<end;){
+        entry=decode_packed_entry_number(book,b);
+        if(entry==-1)return(-1);
+        {
+          const float *t=book->valuelist+entry*book->dim;
+          if(book->dim==2){
+            a[0][i>>1]+=t[0];
+            a[1][i>>1]+=t[1];
+          }else if(book->dim==4){
+            a[0][i>>1]+=t[0];
+            a[1][i>>1]+=t[1];
+            a[0][(i>>1)+1]+=t[2];
+            a[1][(i>>1)+1]+=t[3];
+          }else if(book->dim==8){
+            long p=i>>1;
+            a[0][p]+=t[0];
+            a[1][p]+=t[1];
+            a[0][p+1]+=t[2];
+            a[1][p+1]+=t[3];
+            a[0][p+2]+=t[4];
+            a[1][p+2]+=t[5];
+            a[0][p+3]+=t[6];
+            a[1][p+3]+=t[7];
+          }else{
+            for(j=0;j<book->dim;j+=2){
+              a[0][(i+j)>>1]+=t[j];
+              a[1][(i+j)>>1]+=t[j+1];
+            }
+          }
+          i+=book->dim;
+        }
+      }
+      return(0);
+    }
+    m=(offset+n)/ch;
     for(i=offset/ch;i<m;){
       entry = decode_packed_entry_number(book,b);
       if(entry==-1)return(-1);
